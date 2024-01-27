@@ -27,6 +27,19 @@ buildWorkerDefinition('../../../node_modules/monaco-editor-workers/dist/workers/
 const languageId = 'python';
 let languageClient: MonacoLanguageClient;
 
+const mainContent = `from typeinfo import Person
+
+print(Person(name='John', age=42, height=1.8))
+    `;
+
+const typeInfoContent = `from typing import TypedDict
+
+class Person(TypedDict):
+    name: str
+    age: int
+    height: float    
+    `;
+
 const createWebSocket = (url: string): WebSocket => {
     const webSocket = new WebSocket(url);
     webSocket.onopen = async () => {
@@ -37,6 +50,27 @@ const createWebSocket = (url: string): WebSocket => {
             reader,
             writer
         });
+
+        // spam these notifications and hope for the best? doesn't seem to work
+        // also tried using createModelRef -> object.save()
+        await languageClient.sendNotification('textDocument/onDidOpen', {
+            textDocument: {
+                uri: monaco.Uri.file('/workspace/typeinfo.py').toString(),
+                languageId,
+                version: 1,
+                text: typeInfoContent
+            }
+        });
+
+        await languageClient.sendNotification('textDocument/onDidSave', {
+            textDocument: {
+                uri: monaco.Uri.file('/workspace/typeinfo.py').toString(),
+                languageId,
+                version: 1,
+                text: typeInfoContent
+            }
+        });
+
         await languageClient.start();
         reader.onClose(() => languageClient.stop());
     };
@@ -149,7 +183,9 @@ export const startPythonClient = async () => {
     }`);
 
     const fileSystemProvider = new RegisteredFileSystemProvider(false);
-    fileSystemProvider.registerFile(new RegisteredMemoryFile(vscode.Uri.file('/workspace/hello.py'), 'print("Hello, World!")'));
+
+    fileSystemProvider.registerFile(new RegisteredMemoryFile(vscode.Uri.file('/workspace/hello.py'), mainContent));
+    fileSystemProvider.registerFile(new RegisteredMemoryFile(vscode.Uri.file('/workspace/typeinfo.py'), typeInfoContent));
     registerFileSystemOverlay(1, fileSystemProvider);
 
     const registerCommand = async (cmdName: string, handler: (...args: unknown[]) => void) => {
